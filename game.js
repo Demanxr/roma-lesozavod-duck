@@ -70,6 +70,7 @@
       buyCooldown: 0,
     },
     bossIntro: null,
+    phaseTransition: null,
     input: {
       keys: new Set(),
       move: { x: 0, y: 0 },
@@ -677,6 +678,7 @@
     state.kioskVisits = 0;
     state.shop = { closed: false, items: [], noticeCooldown: 0, buyCooldown: 0 };
     state.bossIntro = null;
+    state.phaseTransition = null;
     overlay.classList.add("hidden");
     spawnRoom(false);
     addMessage("Рома вышел в Лесозавод. Духота уже близко.");
@@ -696,6 +698,7 @@
     state.pickups.length = 0;
     state.particles.length = 0;
     state.bossIntro = null;
+    state.phaseTransition = null;
     state.obstacles = makeObstacles(isBoss);
     state.player.x = state.w * 0.5;
     state.player.y = state.h * 0.58;
@@ -928,8 +931,8 @@
     addMessage(`${data.name} вылез на шум.`);
   }
 
-  function addMessage(text, color = "#f7c75d") {
-    const life = clamp(3.2 + text.length / 80, 3.2, 6.4);
+  function addMessage(text, color = "#f7c75d", lifeOverride = null) {
+    const life = lifeOverride ?? clamp(3.2 + text.length / 80, 3.2, 6.4);
     state.messages.push({ text, color, life, max: life });
     if (state.messages.length > 5) state.messages.splice(0, state.messages.length - 5);
   }
@@ -1031,6 +1034,13 @@
     if (!state.running || !state.player) return;
     state.time += dt;
     state.shake = Math.max(0, state.shake - dt * 16);
+
+    if (state.phaseTransition) {
+      updateDestroyPhaseTransition(dt);
+      updateParticles(dt);
+      updateMessages(dt);
+      return;
+    }
 
     updatePlayer(dt);
     updateCompanion(dt);
@@ -1326,17 +1336,13 @@
     }
     e.angle += dt * (1.6 + state.floor * 0.2);
     if (e.hp < e.maxHp * 0.48 && e.phase === 1) {
+      if (e.type === "bossDestroy") {
+        startDestroyPhaseTransition(e);
+        return;
+      }
       e.phase = 2;
       playSound("phase");
-      if (e.type === "bossDestroy") {
-        e.r = 47;
-        e.speed *= 1.18;
-        e.damage = 2;
-        radialEnemyBullets(e.x, e.y, 14, "#d4d4d4", 190, 4.4);
-        addMessage("Устрой Дестрой сбривает волосы и залезает в тачку.");
-      } else {
-        addMessage(`${e.name} злится сильнее.`);
-      }
+      addMessage(`${e.name} злится сильнее.`);
       state.shake = 9;
     }
     e.spawnTimer -= dt;
@@ -1416,6 +1422,70 @@
         addMessage("Духота Амира давит, но не добивает.", "#c4b49a");
         e.auraMessageTick = 0;
       }
+    }
+  }
+
+  function startDestroyPhaseTransition(e) {
+    playSound("phase");
+    e.phaseTransition = true;
+    e.transitionStage = "shave";
+    e.hp = Math.max(e.hp, e.maxHp * 0.42);
+    e.vx = 0;
+    e.vy = 0;
+    e.dash = 0;
+    e.cooldown = 99;
+    e.spawnTimer = 99;
+    state.bullets.length = 0;
+    state.enemyBullets.length = 0;
+    state.shake = 10;
+    state.phaseTransition = {
+      type: "destroy",
+      boss: e,
+      time: 0,
+      stage: 0,
+    };
+    addMessage("Устрой Дестрой: «Пауза. Мне надо в образ»", "#f7c75d", 2.2);
+  }
+
+  function updateDestroyPhaseTransition(dt) {
+    const tr = state.phaseTransition;
+    if (!tr || tr.type !== "destroy") return;
+    tr.time += dt;
+    const e = tr.boss;
+    if (!e || e.hp <= 0) {
+      state.phaseTransition = null;
+      return;
+    }
+
+    const stage = tr.time < 1.9 ? 0 : tr.time < 3.9 ? 1 : tr.time < 5.8 ? 2 : 3;
+    if (stage !== tr.stage) {
+      tr.stage = stage;
+      state.shake = Math.max(state.shake, stage === 3 ? 12 : 6);
+      playSound(stage === 1 ? "buy" : stage === 2 ? "coin" : "phase");
+      if (stage === 1) addComicBurst(e.x, e.y - e.r - 34, "ВЖЖЖ!", "#dce4e8", 1.15);
+      if (stage === 2) addComicBurst(state.w * 0.5, state.h * 0.42, "ПРАВА!", "#7be0ad", 1.15);
+      if (stage === 3) addComicBurst(e.x, e.y - e.r - 28, "НА ТАЧКЕ!", "#f7c75d", 1.2);
+    }
+
+    e.transitionStage = stage === 0 ? "pose" : stage === 1 ? "shave" : stage === 2 ? "license" : "carReturn";
+    e.wobble += dt * 1.8;
+    e.x = state.w * 0.5 + Math.sin(tr.time * 2) * (stage === 3 ? 22 : 4);
+    e.y = state.h * 0.34 + Math.sin(tr.time * 3) * (stage === 3 ? 5 : 2);
+
+    if (tr.time > 7.2) {
+      e.phase = 2;
+      e.phaseTransition = false;
+      e.transitionStage = null;
+      e.r = 47;
+      e.speed *= 1.18;
+      e.damage = 2;
+      e.cooldown = 0.9;
+      e.spawnTimer = 3.2;
+      state.phaseTransition = null;
+      state.shake = 12;
+      playSound("phase");
+      radialEnemyBullets(e.x, e.y, 14, "#d4d4d4", 190, 4.4);
+      addMessage("Устрой Дестрой вернулся с правами и без волос.", "#f7c75d", 2.8);
     }
   }
 
@@ -2017,6 +2087,7 @@
     drawDoor();
     drawBossIntro();
     drawScreenFx();
+    drawDestroyPhaseTransition();
     drawMessages();
     ctx.restore();
     drawBossHud();
@@ -2709,11 +2780,43 @@
   }
 
   function drawDestroyBoss(e) {
+    if (e.phase === 1 && e.transitionStage === "carReturn") {
+      drawDestroyCar(e, true);
+      return;
+    }
+
     if (e.phase === 1) {
       ctx.fillStyle = "#2b1d18";
-      for (let i = -4; i <= 4; i++) {
+      const shaveProgress =
+        e.transitionStage === "shave" ? 0.45 : e.transitionStage === "license" ? 0.9 : e.transitionStage === "carReturn" ? 1 : 0;
+      const mane = Math.max(0, 1 - shaveProgress);
+      if (mane > 0.05) {
+        ctx.fillStyle = "#21130f";
         ctx.beginPath();
-        ctx.ellipse(i * 5, -e.r * 0.42 + Math.sin(e.wobble + i) * 3, 7, e.r * 0.98, 0.18 * i, 0, TAU);
+        ctx.ellipse(0, -e.r * 0.54, e.r * (0.96 * mane + 0.1), e.r * (1.28 * mane + 0.16), 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#2f1b14";
+        for (let i = -3; i <= 3; i++) {
+          const lockH = e.r * (0.86 + hash01(i + 9) * 0.32) * mane;
+          ctx.beginPath();
+          ctx.ellipse(i * e.r * 0.22, -e.r * 0.55 + Math.sin(e.wobble + i) * 3, e.r * 0.18, lockH, i * 0.16, 0, TAU);
+          ctx.fill();
+        }
+        ctx.strokeStyle = "rgba(247, 199, 93, 0.16)";
+        ctx.lineWidth = 2;
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.moveTo(i * e.r * 0.2, -e.r * 1.18 * mane);
+          ctx.quadraticCurveTo(i * e.r * 0.3, -e.r * 0.5, i * e.r * 0.18, e.r * 0.22 * mane);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = "#2b1d18";
+      const hairLimit = Math.ceil(4 * (1 - shaveProgress));
+      for (let i = -4; i <= 4; i++) {
+        if (Math.abs(i) > hairLimit) continue;
+        ctx.beginPath();
+        ctx.ellipse(i * 5, -e.r * 0.42 + Math.sin(e.wobble + i) * 3, 7, e.r * (0.98 - shaveProgress * 0.42), 0.18 * i, 0, TAU);
         ctx.fill();
       }
       ctx.fillStyle = "#e07058";
@@ -2743,6 +2846,10 @@
       return;
     }
 
+    drawDestroyCar(e, false);
+  }
+
+  function drawDestroyCar(e, tinyLicense) {
     ctx.fillStyle = "#2a2c2f";
     roundedRect(-e.r * 1.35, -e.r * 0.58, e.r * 2.7, e.r * 1.16, 10);
     ctx.fill();
@@ -2779,6 +2886,14 @@
       ctx.beginPath();
       ctx.ellipse(-e.r + i * e.r * 0.5, -e.r * 1.08 + Math.sin(state.time * 5 + i) * 2, 4, 8, 0.4, 0, TAU);
       ctx.fill();
+    }
+    if (tinyLicense) {
+      ctx.fillStyle = "#f7f0dc";
+      roundedRect(e.r * 0.34, -e.r * 0.88, e.r * 0.44, e.r * 0.28, 3);
+      ctx.fill();
+      ctx.strokeStyle = "#7be0ad";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
   }
 
@@ -3244,6 +3359,166 @@
     ctx.restore();
   }
 
+  function drawDestroyPhaseTransition() {
+    const tr = state.phaseTransition;
+    if (!tr || tr.type !== "destroy") return;
+    const stage = tr.stage;
+    const cards = [
+      { title: "СТОП-КАДР", text: "Устрой Дестрой смотрит в зеркало и понимает: нужна перезагрузка." },
+      { title: "ВЖЖЖ!", text: "Грива летит на пол. Два меча ждут, пока мастер наведет красоту." },
+      { title: "АВТОШКОЛА", text: "Он сдаёт на права за кадром. Инструктор плачет, но печать ставит." },
+      { title: "ВОЗВРАЩЕНИЕ", text: "Лысый, злой и официально за рулём. Сейчас будет парковка в Рому." },
+    ];
+    const card = cards[stage] || cards[cards.length - 1];
+    const mobile = state.w <= 680 || state.h > state.w * 1.2;
+    const w = Math.min(mobile ? state.w - 26 : 500, state.w - 26);
+    const h = mobile ? 184 : 206;
+    const x = state.w * 0.5 - w * 0.5;
+    const y = mobile ? Math.max(76, state.h * 0.16) : Math.max(86, state.h * 0.18);
+    const pop = 1 + Math.sin(Math.min(1, (tr.time % 1.9) / 1.9) * Math.PI) * 0.035;
+
+    ctx.save();
+    ctx.globalAlpha = 0.58;
+    ctx.fillStyle = "#050505";
+    ctx.fillRect(-28, -28, state.w + 56, state.h + 56);
+    ctx.globalAlpha = 1;
+    ctx.translate(state.w * 0.5, y + h * 0.5);
+    ctx.scale(pop, pop);
+    ctx.translate(-state.w * 0.5, -(y + h * 0.5));
+
+    ctx.fillStyle = "rgba(0,0,0,0.38)";
+    roundedRect(x + 7, y + 8, w, h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#fff7dc";
+    roundedRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#151510";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    ctx.fillStyle = stage === 2 ? "#7be0ad" : stage === 3 ? "#f7c75d" : "#ff6b8a";
+    ctx.beginPath();
+    ctx.moveTo(x + 14, y);
+    ctx.lineTo(x + 128, y);
+    ctx.lineTo(x + 102, y + 32);
+    ctx.lineTo(x + 14, y + 24);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#151510";
+    ctx.font = mobile ? "1000 19px system-ui" : "1000 23px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(card.title, x + w * 0.5, y + 34);
+
+    const iconY = y + (mobile ? 86 : 98);
+    if (stage === 0) drawManeIcon(x + w * 0.5, iconY, mobile ? 0.82 : 1);
+    else if (stage === 1) drawShaveIcon(x + w * 0.5, iconY, mobile ? 0.82 : 1);
+    else if (stage === 2) drawLicenseIcon(x + w * 0.5, iconY, mobile ? 0.82 : 1);
+    else drawCarPanelIcon(x + w * 0.5, iconY, mobile ? 0.82 : 1);
+
+    ctx.font = mobile ? "800 12px system-ui" : "800 14px system-ui";
+    ctx.textBaseline = "top";
+    const lines = wrapText(card.text, w - 34, mobile ? 3 : 2);
+    lines.forEach((line, index) => ctx.fillText(line, x + w * 0.5, y + h - 62 + index * (mobile ? 15 : 17)));
+
+    const dotY = y + h - 17;
+    for (let i = 0; i < cards.length; i++) {
+      ctx.fillStyle = i <= stage ? "#151510" : "rgba(21,21,16,0.22)";
+      ctx.beginPath();
+      ctx.arc(x + w * 0.5 - 30 + i * 20, dotY, i === stage ? 5 : 3.5, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawManeIcon(x, y, s = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#21130f";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 54, 46, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#f0c6a0";
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 24, 27, 0, 0, TAU);
+    ctx.fill();
+    drawEyes(-8, -8, 8, -8, 3);
+    ctx.strokeStyle = "#151510";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 8, 9, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawShaveIcon(x, y, s = 1) {
+    drawManeIcon(x - 18 * s, y, s * 0.72);
+    ctx.save();
+    ctx.translate(x + 28 * s, y - 8 * s);
+    ctx.scale(s, s);
+    ctx.rotate(-0.45);
+    ctx.fillStyle = "#dce4e8";
+    roundedRect(-26, -7, 52, 14, 4);
+    ctx.fill();
+    ctx.strokeStyle = "#151510";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = "#64c7ff";
+    roundedRect(-8, 5, 16, 34, 4);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawLicenseIcon(x, y, s = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#f7f0dc";
+    roundedRect(-54, -33, 108, 66, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#151510";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = "#7be0ad";
+    roundedRect(-44, -22, 36, 44, 5);
+    ctx.fill();
+    ctx.fillStyle = "#151510";
+    ctx.font = "1000 14px system-ui";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("BOSS", -2, -12);
+    ctx.fillText("DRIVE", -2, 10);
+    ctx.restore();
+  }
+
+  function drawCarPanelIcon(x, y, s = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#2a2c2f";
+    roundedRect(-70, -20, 140, 48, 10);
+    ctx.fill();
+    ctx.strokeStyle = "#151510";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = "#8fa3b0";
+    roundedRect(-34, -48, 68, 34, 7);
+    ctx.fill();
+    ctx.fillStyle = "#f7c75d";
+    ctx.beginPath();
+    ctx.ellipse(-59, -5, 12, 8, 0, 0, TAU);
+    ctx.ellipse(59, -5, 12, 8, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#111";
+    ctx.beginPath();
+    ctx.arc(-38, 29, 16, 0, TAU);
+    ctx.arc(38, 29, 16, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawBossHud() {
     if (state.bossIntro) {
       bossWrap.classList.add("hidden");
@@ -3313,6 +3588,8 @@
     const float = Math.sin(state.time * (boss ? 5 : 7) + x * 0.03) * (boss ? 2 : 1.4);
     const bx = clamp(x - w * 0.5, 10, state.w - w - 10);
     const by = clamp(y - h + float, 72, state.h - h - 36);
+    ctx.textAlign = boss ? "center" : "left";
+    ctx.textBaseline = "top";
     ctx.globalAlpha = clamp(lifeRatio * 1.6, 0, 1);
     ctx.fillStyle = boss ? "rgba(247, 240, 220, 0.96)" : "rgba(255, 252, 228, 0.94)";
     ctx.strokeStyle = boss ? "#151510" : "#1f1710";
@@ -3328,7 +3605,7 @@
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = boss ? "#3c3327" : "#2b1d18";
-    lines.forEach((line, index) => ctx.fillText(line, bx + 9, by + 7 + index * lineHeight));
+    lines.forEach((line, index) => ctx.fillText(line, boss ? bx + w * 0.5 : bx + 9, by + 7 + index * lineHeight));
     ctx.restore();
   }
 
