@@ -378,23 +378,37 @@ h1 {
   }
 
   #items-panel {
-    top: auto;
-    left: max(12px, env(safe-area-inset-left));
+    top: calc(max(12px, env(safe-area-inset-top)) + 42px);
+    left: auto;
     right: max(12px, env(safe-area-inset-right));
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(36vw, 160px) + 10px);
-    width: auto;
-    max-height: 74px;
+    bottom: auto;
+    width: min(48vw, 208px);
+    min-height: 42px;
+    max-height: 42px;
+    padding: 6px;
     overflow: hidden;
   }
 
+  #items-panel h2 {
+    display: none;
+  }
+
   #items-list {
-    grid-template-columns: repeat(10, 30px);
+    display: flex;
+    gap: 5px;
+    min-width: 0;
     overflow: hidden;
   }
 
   .item-chip {
-    height: 30px;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
     font-size: 16px;
+  }
+
+  #synergy-toast {
+    display: none;
   }
 }
 

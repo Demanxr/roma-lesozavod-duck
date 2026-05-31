@@ -23,6 +23,12 @@
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const now = () => performance.now() / 1000;
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  const sound = {
+    ctx: null,
+    master: null,
+    last: Object.create(null),
+  };
 
   const state = {
     w: 960,
@@ -350,6 +356,136 @@
     return state.activeSynergies.has(id);
   }
 
+  function ensureAudio() {
+    if (!AudioCtor) return null;
+    if (!sound.ctx) {
+      sound.ctx = new AudioCtor();
+      sound.master = sound.ctx.createGain();
+      sound.master.gain.value = 0.18;
+      sound.master.connect(sound.ctx.destination);
+    }
+    if (sound.ctx.state === "suspended") sound.ctx.resume();
+    return sound.ctx;
+  }
+
+  function tone(freq, duration, gain = 0.22, type = "sine", delay = 0, bend = 0) {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (bend) osc.frequency.exponentialRampToValueAtTime(Math.max(24, freq + bend), t + duration);
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), t + 0.012);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(amp);
+    amp.connect(sound.master);
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+  }
+
+  function noise(duration, gain = 0.12, delay = 0, filterFreq = 620) {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * duration)), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const amp = ctx.createGain();
+    src.buffer = buffer;
+    filter.type = "lowpass";
+    filter.frequency.value = filterFreq;
+    amp.gain.setValueAtTime(gain, t);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    src.connect(filter);
+    filter.connect(amp);
+    amp.connect(sound.master);
+    src.start(t);
+  }
+
+  function playSound(name) {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const t = performance.now();
+    const gap = {
+      shoot: 70,
+      quack: 90,
+      aura: 900,
+      knock: 380,
+      denied: 650,
+    }[name] || 0;
+    if (gap && t - (sound.last[name] || 0) < gap) return;
+    sound.last[name] = t;
+
+    if (name === "start") {
+      tone(220, 0.08, 0.12, "square", 0, 90);
+      tone(330, 0.12, 0.1, "triangle", 0.07, 160);
+    } else if (name === "shoot") {
+      tone(360 + rand(-24, 34), 0.055, 0.075, "square", 0, -150);
+      tone(155, 0.05, 0.035, "sawtooth", 0.015, -55);
+    } else if (name === "coin") {
+      tone(920, 0.055, 0.11, "sine", 0, 180);
+      tone(1320, 0.075, 0.08, "triangle", 0.055, 220);
+    } else if (name === "heart") {
+      tone(280, 0.1, 0.09, "sine", 0, -35);
+      tone(420, 0.13, 0.08, "sine", 0.08, -40);
+    } else if (name === "item") {
+      tone(520, 0.08, 0.1, "triangle", 0, 240);
+      tone(760, 0.1, 0.08, "sine", 0.07, 310);
+      noise(0.16, 0.035, 0.02, 1800);
+    } else if (name === "synergy") {
+      tone(390, 0.09, 0.1, "triangle", 0, 180);
+      tone(620, 0.1, 0.085, "triangle", 0.08, 280);
+      tone(980, 0.16, 0.075, "sine", 0.16, 420);
+    } else if (name === "dash") {
+      noise(0.2, 0.12, 0, 1600);
+      tone(180, 0.16, 0.12, "sawtooth", 0, 520);
+      tone(740, 0.12, 0.07, "triangle", 0.04, -220);
+    } else if (name === "hit") {
+      noise(0.12, 0.11, 0, 460);
+      tone(150, 0.11, 0.08, "sawtooth", 0, -55);
+    } else if (name === "shield") {
+      tone(210, 0.08, 0.08, "square", 0, 85);
+      tone(140, 0.1, 0.06, "square", 0.055, -40);
+    } else if (name === "pop") {
+      tone(170, 0.075, 0.1, "triangle", 0, -70);
+      noise(0.08, 0.07, 0.01, 850);
+    } else if (name === "boss") {
+      tone(92, 0.22, 0.13, "sawtooth", 0, -24);
+      tone(70, 0.28, 0.1, "square", 0.12, -18);
+      noise(0.25, 0.06, 0, 420);
+    } else if (name === "phase") {
+      tone(180, 0.11, 0.13, "sawtooth", 0, 340);
+      noise(0.22, 0.11, 0.04, 900);
+      tone(520, 0.18, 0.08, "square", 0.12, -210);
+    } else if (name === "knock") {
+      noise(0.07, 0.13, 0, 260);
+      tone(115, 0.065, 0.11, "square", 0.005, -35);
+    } else if (name === "aura") {
+      tone(118, 0.18, 0.055, "sawtooth", 0, -12);
+      noise(0.2, 0.03, 0, 300);
+    } else if (name === "door") {
+      tone(240, 0.09, 0.08, "triangle", 0, 160);
+      tone(360, 0.11, 0.06, "triangle", 0.075, -80);
+    } else if (name === "buy") {
+      tone(640, 0.06, 0.1, "triangle", 0, 180);
+      tone(980, 0.08, 0.08, "sine", 0.06, 160);
+    } else if (name === "denied") {
+      tone(160, 0.09, 0.08, "square", 0, -60);
+      tone(120, 0.11, 0.06, "square", 0.08, -35);
+    } else if (name === "win") {
+      [330, 420, 520, 660, 880].forEach((freq, i) => tone(freq, 0.12, 0.08, "triangle", i * 0.075, 90));
+    } else if (name === "lose") {
+      tone(220, 0.18, 0.1, "sawtooth", 0, -65);
+      tone(150, 0.24, 0.09, "square", 0.14, -60);
+      noise(0.28, 0.07, 0.08, 360);
+    }
+  }
+
   function resize() {
     state.dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     state.w = Math.max(320, window.innerWidth);
@@ -360,6 +496,7 @@
   }
 
   function resetGame() {
+    playSound("start");
     state.running = true;
     state.started = true;
     state.gameOver = false;
@@ -631,6 +768,7 @@
       angle: 0,
       spawnGrace: 1.25,
     });
+    playSound("boss");
     addMessage(`${data.name} вылез на шум.`);
   }
 
@@ -645,6 +783,7 @@
 
   function giveItem(item) {
     if (!item || state.player.itemIds.has(item.id)) return;
+    playSound("item");
     const p = state.player;
     p.itemIds.add(item.id);
     p.items.push(item);
@@ -660,6 +799,7 @@
       if (state.activeSynergies.has(synergy.id)) continue;
       if (synergy.needs.every((id) => state.player.itemIds.has(id))) {
         state.activeSynergies.add(synergy.id);
+        playSound("synergy");
         addMessage(`Синергия: ${synergy.name}. ${synergy.desc}`, "#64c7ff");
         synergyToast.textContent = `${synergy.name}: ${synergy.desc}`;
         if (synergy.id === "luckyCoffee") state.player.traits.crit += 0.12;
@@ -795,6 +935,7 @@
     p.prideCharge = 0;
     p.invuln = Math.max(p.invuln, 0.35);
     state.shake = Math.max(state.shake, 5);
+    playSound("dash");
     addMessage("Радужный рывок!", "#64c7ff");
     for (let i = 0; i < 18; i++) addParticle(p.x, p.y, pick(["#ff6b8a", "#f7c75d", "#7be0ad", "#64c7ff"]), rand(3, 7), rand(0.35, 0.8));
   }
@@ -825,6 +966,7 @@
 
   function firePlayerShot(x, y, dx, dy) {
     const p = state.player;
+    playSound("shoot");
     const shots = p.traits.shots;
     const spread = shots > 1 ? p.traits.spread || 0.16 : 0;
     const baseAngle = Math.atan2(dy, dx);
@@ -976,6 +1118,7 @@
     e.angle += dt * (1.6 + state.floor * 0.2);
     if (e.hp < e.maxHp * 0.48 && e.phase === 1) {
       e.phase = 2;
+      playSound("phase");
       if (e.type === "bossDestroy") {
         e.r = 47;
         e.speed *= 1.18;
@@ -1060,6 +1203,7 @@
         e.auraHudTick = 0;
       }
       if (e.auraMessageTick > 1.35) {
+        playSound("aura");
         addMessage("Духота Амира давит, но не добивает.", "#c4b49a");
         e.auraMessageTick = 0;
       }
@@ -1217,6 +1361,7 @@
   function killEnemy(index) {
     const e = state.enemies[index];
     state.enemies.splice(index, 1);
+    playSound(e.boss ? "boss" : "pop");
     state.shake = Math.max(state.shake, e.boss ? 14 : 4);
     for (let i = 0; i < (e.boss ? 26 : 8); i++) addParticle(e.x, e.y, e.color, rand(3, 8), rand(0.35, 0.8));
     state.player.prideCharge = Math.min(100, state.player.prideCharge + (e.boss ? 35 : 9));
@@ -1265,6 +1410,7 @@
         if (pickup.type === "coin") {
           pickup.dead = true;
           state.coins += pickup.value || 1;
+          playSound("coin");
           p.prideCharge = Math.min(100, p.prideCharge + 4);
           if (hasSynergy("magnetBank") && state.coins % 5 === 0) p.hp = Math.min(p.maxHp, p.hp + 1);
           updateHud();
@@ -1274,6 +1420,7 @@
             pickup.dead = true;
             p.hp = Math.min(p.maxHp, p.hp + (pickup.value || 1));
             p.prideCharge = Math.min(100, p.prideCharge + 8);
+            playSound("heart");
             addMessage("Рома подобрал сердце.", "#e75d55");
             updateHud();
           }
@@ -1298,6 +1445,7 @@
       p.x > kiosk.x - 28 && p.x < kiosk.x + kiosk.w + 28 && p.y > kiosk.y - 34 && p.y < kiosk.y + kiosk.h + 34;
 
     if (state.shop.closed && nearKiosk && state.shop.noticeCooldown <= 0) {
+      playSound("denied");
       addMessage(state.kioskVisits === 1 ? "Романькова: перерыв 15 минут. Первый киоск закрыт." : "Романькова опять на перерыве. Бывает.", "#f7c75d");
       state.shop.noticeCooldown = 2.0;
     }
@@ -1310,11 +1458,13 @@
         if (state.coins >= slot.price) {
           state.coins -= slot.price;
           slot.bought = true;
+          playSound("buy");
           giveItem(slot.item);
           addMessage(`Куплено у Романьковой за ${slot.price}.`, "#7be0ad");
           state.shop.buyCooldown = 0.55;
           updateHud();
         } else {
+          playSound("denied");
           addMessage(`Не хватает монет: нужно ${slot.price}.`, "#f7c75d");
           state.shop.buyCooldown = 1.0;
         }
@@ -1330,18 +1480,21 @@
     if (intro.stage === 0 && intro.time > 1.35) {
       intro.stage = 1;
       state.shake = Math.max(state.shake, 3);
+      playSound("knock");
       addMessage("Тук.", "#f7f0dc");
       addKnockDust();
     }
     if (intro.stage === 1 && intro.time > 2.25) {
       intro.stage = 2;
       state.shake = Math.max(state.shake, 5);
+      playSound("knock");
       addMessage("Тук. Тук.", "#f7f0dc");
       addKnockDust();
     }
     if (intro.stage === 2 && intro.time > 3.35) {
       intro.stage = 3;
       state.shake = Math.max(state.shake, 8);
+      playSound("aura");
       addMessage("Входит Амир. Воздух сразу стал тяжелым.", "#c4b49a");
       state.bullets.length = 0;
       state.enemyBullets.length = 0;
@@ -1396,6 +1549,7 @@
   }
 
   function nextRoom() {
+    playSound("door");
     if (state.roomIsShop) {
       if (state.room >= state.roomsBeforeBoss) {
         spawnRoom(true);
@@ -1439,6 +1593,7 @@
     if (p.invuln > 0 || state.gameOver) return;
     if (p.traits.shieldCoins && state.coins >= 3 && Math.random() < 0.55) {
       state.coins -= 3;
+      playSound("shield");
       addMessage("Кошелек-щит съел удар.", "#64c7ff");
       p.invuln = 0.75;
       updateHud();
@@ -1447,6 +1602,7 @@
     p.hp -= amount;
     p.invuln = 1.0;
     state.shake = 9;
+    playSound("hit");
     addParticle(p.x, p.y, "#e75d55", 12, 0.55);
     updateHud();
     if (p.hp <= 0) loseGame();
@@ -1455,12 +1611,14 @@
   function loseGame() {
     state.running = false;
     state.gameOver = true;
+    playSound("lose");
     showEndOverlay("Рома упал", "Лесозавод победил в этот раз. Предметы сочетались, но район сочетался жестче.", "Начать заново");
   }
 
   function winGame() {
     state.running = false;
     state.won = true;
+    playSound("win");
     showEndOverlay("Лесозавод очищен", "Рома выжил, боссы повержены, мерзкий арсенал собран. Основа готова для новых районов, предметов и безумных синергий.", "Играть еще раз");
   }
 
