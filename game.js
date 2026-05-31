@@ -78,6 +78,16 @@
     },
   };
 
+  const quips = {
+    hType: ["ЩА ДОГОНЮ!", "КТО ТУТ КРЯКНУЛ?", "АЙ, ГЛАЗА!", "НЕ СМОТРИ!"],
+    drunk: ["У МЕНЯ ПЛАН!", "ГДЕ МОЙ ПАКЕТ?", "РОМА, СТОЙ, ПОГОВОРИМ!", "Я НОРМАЛЬНЫЙ!"],
+    shade: ["НЮХ-НЮХ...", "Я ПРОСТО ТЕНЬ!", "НЕ ПАЛИ МЕНЯ!", "ТУТ ТЕМНО, ИДЕАЛЬНО."],
+    keg: ["БУМ БУДЕТ.", "Я НЕ ПЬЯН, Я ОБЪЕМНЫЙ.", "ДЕРЖИ ДИСТАНЦИЮ!", "ПОЛ ЗАШАТАЛСЯ."],
+    bossStuffy: ["Рома, ну это несерьезно.", "Мне просто душно за всех.", "Я не атакую, я объясняю.", "Давайте конструктивно.", "Можно без вот этого?"],
+    bossDestroy: ["УСТРОЙ! ДЕСТРОЙ!", "ВОЛОСЫ ДЕРЖАТ УРОН!", "ЩАС В ТАЧКУ!", "ДВА МЕЧА, НОЛЬ ПЛАНА!"],
+    bossShade: ["МЕНЯ НЕ ВИДНО.", "ТЕНЬ ТОЖЕ ЧЕЛОВЕК.", "НЮХЛЯ ВЫШЕЛ.", "СВЕТ ВЫКЛЮЧИ."],
+  };
+
   const basePlayer = () => ({
     x: state.w * 0.5,
     y: state.h * 0.55,
@@ -115,6 +125,11 @@
       crit: 0,
       magnet: 0,
       coinMultiplier: 1,
+      coinRain: 0,
+      firework: 0,
+      stinkAura: 0,
+      healOnKill: 0,
+      rainbowTrail: false,
       companion: false,
       companionTimer: 0,
       shieldCoins: false,
@@ -299,6 +314,109 @@
         p.traits.shieldCoins = true;
       },
     },
+    {
+      id: "cheapFirecrackers",
+      name: "Петарды из ларька",
+      icon: "✹",
+      desc: "Попадания иногда взрываются комиксовым БАХ и раскидывают мелкие осколки.",
+      apply: (p) => {
+        p.traits.firework += 1;
+        p.damage += 0.12;
+      },
+    },
+    {
+      id: "stinkCologne",
+      name: "Одеколон «Душнила»",
+      icon: "☁",
+      desc: "Вокруг Ромы появляется вонючая аура. Враги рядом теряют здоровье и уважение.",
+      apply: (p) => {
+        p.traits.stinkAura += 1;
+        p.maxHp += 1;
+        p.hp = Math.min(p.maxHp, p.hp + 1);
+      },
+    },
+    {
+      id: "glitterJar",
+      name: "Банка пошлых блесток",
+      icon: "✦",
+      desc: "Снаряды оставляют радужный след, а критические попадания становятся чаще.",
+      apply: (p) => {
+        p.traits.rainbowTrail = true;
+        p.traits.crit += 0.1;
+      },
+    },
+    {
+      id: "benchSeeds",
+      name: "Семки с лавочки",
+      icon: "••",
+      desc: "Рома плюется чаще. Не культурно, зато эффективно.",
+      apply: (p) => {
+        p.fireDelay *= 0.78;
+        p.shotSpeed += 24;
+      },
+    },
+    {
+      id: "dendyCartridge",
+      name: "Картридж Денди без наклейки",
+      icon: "▦",
+      desc: "Снаряды отскакивают и дробятся, будто графон из детства проснулся.",
+      apply: (p) => {
+        p.traits.bounce += 1;
+        p.traits.split = true;
+        p.bulletLife += 0.12;
+      },
+    },
+    {
+      id: "busTicket",
+      name: "Билет до конечной",
+      icon: "⇥",
+      desc: "Скорость выше, рывок заряжается быстрее от подбора монет и сердец.",
+      apply: (p) => {
+        p.speed += 34;
+        p.prideCharge = Math.min(100, p.prideCharge + 28);
+      },
+    },
+    {
+      id: "cashUnderSock",
+      name: "Заначка в мокром носке",
+      icon: "₽",
+      desc: "С врагов иногда падает лишняя монетка. Экономика поселка плачет.",
+      apply: (p) => {
+        p.traits.coinRain += 1;
+        p.traits.magnet += 55;
+      },
+    },
+    {
+      id: "bathrobeCape",
+      name: "Халат супергероя",
+      icon: "▲",
+      desc: "Рома жирнее, быстрее и выглядит так, будто сейчас спасет подъезд.",
+      apply: (p) => {
+        p.maxHp += 2;
+        p.hp = Math.min(p.maxHp, p.hp + 2);
+        p.speed += 16;
+      },
+    },
+    {
+      id: "vampireKefir",
+      name: "Кефир из темного угла",
+      icon: "♣",
+      desc: "Иногда убийство лечит Рому. Лучше не спрашивать, почему кефир красный.",
+      apply: (p) => {
+        p.traits.healOnKill += 0.18;
+        p.damage += 0.08;
+      },
+    },
+    {
+      id: "posterMarker",
+      name: "Маркер для подъездных плакатов",
+      icon: "!!",
+      desc: "Снаряды сильнее, а комиксовые вспышки становятся наглее.",
+      apply: (p) => {
+        p.damage += 0.24;
+        p.traits.firework += 0.45;
+      },
+    },
   ];
 
   const itemById = new Map(itemCatalog.map((item) => [item.id, item]));
@@ -345,6 +463,36 @@
       needs: ["magnetWorm", "goldenCoin"],
       name: "Линолеумный банк",
       desc: "Монеты летят быстрее и лечат после каждой пятой.",
+    },
+    {
+      id: "sparkFireworks",
+      needs: ["sparkPlug", "cheapFirecrackers"],
+      name: "Салют у проходной",
+      desc: "Петарды чаще бьют током по соседям.",
+    },
+    {
+      id: "rainbowStink",
+      needs: ["glitterJar", "stinkCologne"],
+      name: "Гламурная духота",
+      desc: "Вонючая аура становится ярче и злее.",
+    },
+    {
+      id: "retroRicochet",
+      needs: ["dendyCartridge", "bottleCap"],
+      name: "Восьмибитный отскок",
+      desc: "Отскоки живут дольше и выглядят как старый мультик.",
+    },
+    {
+      id: "kefirSock",
+      needs: ["vampireKefir", "luckySock"],
+      name: "Кефирный фарт",
+      desc: "Убийства чаще подлечивают Рому, хотя запах спорный.",
+    },
+    {
+      id: "cashCape",
+      needs: ["cashUnderSock", "bathrobeCape"],
+      name: "Батя-капитал",
+      desc: "Лишние монеты падают чаще, а Рома выглядит богаче на полтора подъезда.",
     },
   ];
 
@@ -711,6 +859,8 @@
       boss: false,
       spawnTimer: 0,
       spawnGrace: 1.1,
+      quip: null,
+      quipTimer: rand(1.4, 4.8),
     };
     state.enemies.push(enemy);
     return enemy;
@@ -767,6 +917,8 @@
       phase: 1,
       angle: 0,
       spawnGrace: 1.25,
+      quip: null,
+      quipTimer: 1.4,
     });
     playSound("boss");
     addMessage(`${data.name} вылез на шум.`);
@@ -806,6 +958,11 @@
         synergyToast.textContent = `${synergy.name}: ${synergy.desc}`;
         if (synergy.id === "luckyCoffee") state.player.traits.crit += 0.12;
         if (synergy.id === "magnetBank") state.player.traits.magnet += 140;
+        if (synergy.id === "sparkFireworks") state.player.traits.firework += 0.75;
+        if (synergy.id === "rainbowStink") state.player.traits.stinkAura += 1;
+        if (synergy.id === "retroRicochet") state.player.bulletLife += 0.24;
+        if (synergy.id === "kefirSock") state.player.traits.healOnKill += 0.14;
+        if (synergy.id === "cashCape") state.player.traits.coinRain += 1;
       }
     }
   }
@@ -911,6 +1068,7 @@
     p.y = clamp(p.y, 65, state.h - 35);
     resolveObstacleCircle(p);
     p.invuln = Math.max(0, p.invuln - dt);
+    updatePlayerAura(dt);
 
     const aim = shootInput();
     if (aim.active) {
@@ -923,6 +1081,20 @@
     } else {
       p.fireTimer = Math.min(p.fireTimer, p.fireDelay * 0.45);
     }
+  }
+
+  function updatePlayerAura(dt) {
+    const p = state.player;
+    if (!p.traits.stinkAura) return;
+    const range = 58 + p.traits.stinkAura * 14;
+    for (const e of state.enemies) {
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < range + e.r) {
+        damageEnemy(e, dt * (0.34 + p.traits.stinkAura * 0.18), null, false);
+        if (Math.random() < dt * 9) addParticle(e.x + rand(-10, 10), e.y + rand(-10, 10), hasSynergy("rainbowStink") ? pick(["#ff6b8a", "#7be0ad", "#64c7ff"]) : "#c4b49a", rand(2, 5), 0.38);
+      }
+    }
+    if (Math.random() < dt * 10) addParticle(p.x + rand(-28, 28), p.y + rand(-20, 20), hasSynergy("rainbowStink") ? pick(["#ff6b8a", "#f7c75d", "#7be0ad", "#64c7ff"]) : "#a89d82", rand(2, 4), 0.5);
   }
 
   function startPrideDash() {
@@ -1005,9 +1177,12 @@
       split: overrides.split ?? p.traits.split,
       electric: overrides.electric ?? p.traits.electric,
       trail: overrides.trail ?? (p.traits.trail || hasSynergy("spicyFoam")),
-      color: overrides.color ?? (crit ? "#fff3a6" : "#f7f0dc"),
+      firework: overrides.firework ?? p.traits.firework,
+      rainbowTrail: overrides.rainbowTrail ?? p.traits.rainbowTrail,
+      color: overrides.color ?? (p.traits.rainbowTrail ? `hsl(${Math.floor((state.time * 210 + rand(0, 80)) % 360)}, 92%, 72%)` : crit ? "#fff3a6" : "#f7f0dc"),
       hit: new Set(),
       didSplit: false,
+      didFirework: false,
       companion: !!overrides.companion,
       crit,
     });
@@ -1036,6 +1211,7 @@
       const slow = (e.chill > 0 ? 0.48 : 1) * (e.spawnGrace > 0 ? 0.28 : 1);
       e.cooldown -= dt;
       e.wobble += dt * (e.boss ? 1.6 : 4.2);
+      updateEnemyQuip(e, dt);
 
       if (e.dash > 0) {
         e.dash -= dt;
@@ -1080,6 +1256,19 @@
     for (let i = state.enemies.length - 1; i >= 0; i--) {
       if (state.enemies[i].hp <= 0) killEnemy(i);
     }
+  }
+
+  function updateEnemyQuip(e, dt) {
+    if (e.quip) {
+      e.quip.life -= dt;
+      if (e.quip.life <= 0) e.quip = null;
+    }
+    e.quipTimer = Math.max(0, (e.quipTimer || 0) - dt);
+    if (e.spawnGrace > 0 || e.quip || e.quipTimer > 0) return;
+    const list = quips[e.type] || quips[e.attack] || quips.hType;
+    const text = pick(list);
+    e.quip = { text, life: e.boss ? 2.6 : 1.65, max: e.boss ? 2.6 : 1.65 };
+    e.quipTimer = rand(e.boss ? 3.3 : 4.8, e.boss ? 6.4 : 9.0);
   }
 
   function updateEnemyAttack(e, nx, ny) {
@@ -1243,6 +1432,9 @@
           chill: false,
         });
       }
+      if (b.rainbowTrail && Math.random() < dt * 34) {
+        addParticle(b.x + rand(-3, 3), b.y + rand(-3, 3), pick(["#ff6b8a", "#f7c75d", "#7be0ad", "#64c7ff"]), rand(2, 5), 0.5);
+      }
 
       if (b.x < 34 + b.r || b.x > state.w - 34 - b.r) {
         if (b.bounce > 0) {
@@ -1325,6 +1517,25 @@
     }
     if (bullet.chill) e.chill = Math.max(e.chill, 2.4);
     if (bullet.electric) chainLightning(e, bullet.damage * (hasSynergy("wiredSoda") && bullet.bounce < state.player.traits.bounce ? 0.72 : 0.48));
+    if (bullet.firework && !bullet.didFirework && Math.random() < Math.min(0.5, 0.16 + bullet.firework * 0.08)) {
+      bullet.didFirework = true;
+      addComicBurst(e.x, e.y, pick(["БАХ!", "ПАУ!", "КРЯК!", "ФУХ!"]), bullet.rainbowTrail ? pick(["#ff6b8a", "#f7c75d", "#7be0ad", "#64c7ff"]) : "#f7c75d");
+      const count = hasSynergy("sparkFireworks") ? 7 : 5;
+      for (let i = 0; i < count; i++) {
+        const a = (TAU / count) * i + rand(-0.18, 0.18);
+        spawnPlayerBullet(e.x, e.y, Math.cos(a), Math.sin(a), {
+          damage: bullet.damage * (hasSynergy("sparkFireworks") ? 0.32 : 0.24),
+          r: Math.max(3, bullet.r * 0.45),
+          life: 0.38,
+          speed: 230,
+          bounce: 0,
+          pierce: 0,
+          firework: 0,
+          electric: hasSynergy("sparkFireworks"),
+          color: bullet.rainbowTrail ? `hsl(${Math.floor((i / count) * 360)}, 92%, 72%)` : "#ffe08a",
+        });
+      }
+    }
     if (bullet.split && !bullet.didSplit) {
       bullet.didSplit = true;
       const angle = Math.atan2(bullet.vy, bullet.vx);
@@ -1365,10 +1576,26 @@
     state.enemies.splice(index, 1);
     playSound(e.boss ? "boss" : "pop");
     state.shake = Math.max(state.shake, e.boss ? 14 : 4);
+    addComicBurst(
+      e.x,
+      e.y - e.r - 4,
+      e.boss ? pick(["ФИНАЛ!", "БАБАХ!", "КРЯК-КРЯК!"]) : pick(["БАХ!", "КРЯК!", "ПАУ!", "ФУХ!"]),
+      e.boss ? "#ff6b8a" : pick(["#f7c75d", "#7be0ad", "#64c7ff", "#ff6b8a"]),
+      e.boss ? 1.25 : 1,
+    );
     for (let i = 0; i < (e.boss ? 26 : 8); i++) addParticle(e.x, e.y, e.color, rand(3, 8), rand(0.35, 0.8));
     state.player.prideCharge = Math.min(100, state.player.prideCharge + (e.boss ? 35 : 9));
     if (!e.boss) {
       state.pickups.push({ type: "coin", x: e.x + rand(-8, 8), y: e.y + rand(-8, 8), r: 9, value: state.player.traits.coinMultiplier });
+      if (state.player.traits.coinRain && Math.random() < Math.min(0.62, 0.16 * state.player.traits.coinRain)) {
+        state.pickups.push({ type: "coin", x: e.x + rand(-18, 18), y: e.y + rand(-18, 18), r: 9, value: state.player.traits.coinMultiplier });
+        addComicBurst(e.x, e.y - 14, "КЭШ!", "#f7c75d");
+      }
+      if (state.player.traits.healOnKill && Math.random() < state.player.traits.healOnKill && state.player.hp < state.player.maxHp) {
+        state.player.hp = Math.min(state.player.maxHp, state.player.hp + 1);
+        addComicBurst(e.x, e.y - 22, "ХЛЕБНУЛ!", "#e75d55");
+        updateHud();
+      }
       if (Math.random() < 0.14) {
         state.pickups.push({ type: "heart", x: e.x + rand(-12, 12), y: e.y + rand(-12, 12), r: 10, value: 1 });
       }
@@ -1702,6 +1929,22 @@
     });
   }
 
+  function addComicBurst(x, y, text, color = "#f7c75d", scale = 1) {
+    state.particles.push({
+      x,
+      y,
+      vx: rand(-20, 20),
+      vy: rand(-88, -52),
+      size: rand(1.0, 1.28) * scale,
+      color,
+      life: 1.1,
+      max: 1.1,
+      comic: true,
+      text,
+    });
+    for (let i = 0; i < Math.round(12 * scale); i++) addParticle(x, y, color, rand(3, 8), rand(0.24, 0.6));
+  }
+
   function addLightning(x1, y1, x2, y2) {
     state.particles.push({ x: x1, y: y1, x2, y2, color: "#9fe9ff", life: 0.12, max: 0.12, lightning: true });
   }
@@ -1713,7 +1956,7 @@
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.vx *= 0.96;
-        p.vy *= 0.96;
+        p.vy = p.comic ? p.vy * 0.94 + 28 * dt : p.vy * 0.96;
       }
     }
     state.particles = state.particles.filter((p) => p.life > 0);
@@ -1754,6 +1997,7 @@
     drawParticles();
     drawDoor();
     drawBossIntro();
+    drawScreenFx();
     drawMessages();
     ctx.restore();
     drawBossHud();
@@ -1774,10 +2018,14 @@
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, state.w, state.h);
 
-    ctx.fillStyle = coolIntro ? "rgba(190, 239, 255, 0.055)" : "rgba(255, 255, 255, 0.035)";
     const tile = 54;
     for (let y = 76; y < state.h - 25; y += tile) {
       for (let x = 34; x < state.w - 34; x += tile) {
+        const seed = x * 0.17 + y * 0.31 + state.floor * 19 + state.room * 7;
+        const shade = hash01(seed);
+        ctx.fillStyle = coolIntro
+          ? `rgba(190, 239, 255, ${0.035 + shade * 0.04})`
+          : `rgba(255, 244, 200, ${0.018 + shade * 0.04})`;
         ctx.fillRect(x, y, tile - 3, tile - 3);
         ctx.strokeStyle = coolIntro ? "rgba(202, 246, 255, 0.1)" : "rgba(0, 0, 0, 0.12)";
         ctx.lineWidth = 1;
@@ -1787,6 +2035,12 @@
         ctx.moveTo(x + 10, y + tile * 0.72);
         ctx.lineTo(x + tile - 8, y + tile * 0.72 + Math.cos((x - y) * 0.02) * 3);
         ctx.stroke();
+        if (shade > 0.72) {
+          ctx.fillStyle = coolIntro ? "rgba(197, 237, 245, 0.08)" : "rgba(18, 14, 8, 0.12)";
+          ctx.beginPath();
+          ctx.ellipse(x + 18 + shade * 18, y + 14 + hash01(seed + 2) * 22, 15, 3, hash01(seed + 4) * TAU, 0, TAU);
+          ctx.fill();
+        }
       }
     }
 
@@ -1825,8 +2079,10 @@
     ctx.strokeStyle = "rgba(247, 240, 220, 0.17)";
     ctx.lineWidth = 2;
     ctx.strokeRect(34, 64, state.w - 68, state.h - 92);
+    drawWallBolts(coolIntro);
 
     for (const o of state.obstacles) {
+      drawBlobShadow(o.x + o.w * 0.5, o.y + o.h + 5, o.w * 0.46, 8, 0.24);
       ctx.fillStyle = "#3c3327";
       roundedRect(o.x, o.y, o.w, o.h, 8);
       ctx.fill();
@@ -1843,6 +2099,7 @@
         ctx.lineTo(o.x + o.w - 8, yy + Math.sin(o.x + yy) * 2);
         ctx.stroke();
       }
+      drawNails(o.x + 10, o.y + 9, o.w - 20, o.h - 18);
     }
   }
 
@@ -1954,6 +2211,14 @@
       ctx.save();
       ctx.translate(p.x, p.y + bob);
       if (p.type === "coin") {
+        drawBlobShadow(0, 7, p.r * 1.2, 4, 0.24);
+        const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, p.r * 2.4);
+        glow.addColorStop(0, "rgba(247,199,93,0.45)");
+        glow.addColorStop(1, "rgba(247,199,93,0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r * 2.2, 0, TAU);
+        ctx.fill();
         ctx.fillStyle = "#f7c75d";
         ctx.beginPath();
         ctx.arc(0, 0, p.r, 0, TAU);
@@ -1961,6 +2226,7 @@
         ctx.strokeStyle = "#7b5420";
         ctx.lineWidth = 2;
         ctx.stroke();
+        drawSpriteHighlight(-3, -4, p.r * 0.32, p.r * 0.18, 0.42);
         ctx.fillStyle = "#7b5420";
         ctx.font = "bold 12px system-ui";
         ctx.textAlign = "center";
@@ -1976,7 +2242,16 @@
         ctx.strokeStyle = "rgba(0,0,0,0.3)";
         ctx.lineWidth = 2;
         ctx.stroke();
+        drawSpriteHighlight(-4, -7, 5, 3, 0.34);
       } else if (p.item) {
+        drawBlobShadow(0, 18, 24, 7, 0.25);
+        const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 34);
+        glow.addColorStop(0, "rgba(255, 220, 126, 0.38)");
+        glow.addColorStop(1, "rgba(255, 220, 126, 0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, 34, 0, TAU);
+        ctx.fill();
         ctx.fillStyle = "#e0b05b";
         roundedRect(-22, -17, 44, 34, 7);
         ctx.fill();
@@ -1988,6 +2263,12 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(p.item.icon, 0, 1);
+        ctx.strokeStyle = "rgba(255,255,255,0.28)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-15, -9);
+        ctx.lineTo(15, -12);
+        ctx.stroke();
       }
       ctx.restore();
     }
@@ -1997,6 +2278,13 @@
     for (const b of state.bullets) {
       ctx.save();
       ctx.globalAlpha = clamp(b.life / 0.12, 0.25, 1);
+      const glow = ctx.createRadialGradient(b.x, b.y, 1, b.x, b.y, b.r * 3.3);
+      glow.addColorStop(0, b.crit ? "rgba(255,243,166,0.48)" : "rgba(247,240,220,0.3)");
+      glow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * 3.1, 0, TAU);
+      ctx.fill();
       ctx.fillStyle = b.color;
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
@@ -2011,6 +2299,13 @@
       ctx.restore();
     }
     for (const b of state.enemyBullets) {
+      const glow = ctx.createRadialGradient(b.x, b.y, 1, b.x, b.y, b.r * 3.2);
+      glow.addColorStop(0, "rgba(231,93,85,0.28)");
+      glow.addColorStop(1, "rgba(231,93,85,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * 3, 0, TAU);
+      ctx.fill();
       ctx.fillStyle = b.color;
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, TAU);
@@ -2026,6 +2321,7 @@
       if (e.type === "bossStuffy") drawStuffyAura(e);
       ctx.save();
       ctx.translate(e.x, e.y);
+      drawBlobShadow(0, e.r * 0.95, e.r * 1.15, e.r * 0.34, e.boss ? 0.34 : 0.26);
       ctx.rotate(Math.sin(e.wobble) * (e.boss ? 0.05 : 0.12));
       ctx.globalAlpha = e.spawnGrace > 0 ? 0.42 + Math.sin(state.time * 18) * 0.18 : e.flash > 0 ? 0.72 : 1;
       if (e.boss) drawBoss(e);
@@ -2042,6 +2338,7 @@
         ctx.fillStyle = "#e75d55";
         ctx.fillRect(e.x - barW / 2, e.y - e.r - 12, barW * clamp(e.hp / e.maxHp, 0, 1), 4);
       }
+      if (e.quip) drawSpeechBubble(e.x, e.y - e.r - (e.boss ? 36 : 22), e.quip.text, e.quip.life / e.quip.max, e.boss);
     }
   }
 
@@ -2272,6 +2569,12 @@
       ctx.beginPath();
       ctx.ellipse(0, -e.r * 1.78, e.r * 0.68, e.r * 0.78, 0, 0, TAU);
       ctx.fill();
+      ctx.fillStyle = "rgba(100, 199, 255, 0.5)";
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.ellipse(e.r * (0.55 + i * 0.13), -e.r * (1.86 - i * 0.18), 2.2, 4.4, 0.2, 0, TAU);
+        ctx.fill();
+      }
       ctx.strokeStyle = "#2d251f";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -2290,6 +2593,14 @@
       ctx.moveTo(e.r * 0.34, -e.r * 1.3);
       ctx.lineTo(e.r * 1.1, -e.r * 0.15);
       ctx.stroke();
+      ctx.strokeStyle = "rgba(246, 225, 180, 0.28)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-e.r * 0.2, -e.r * 1.0 + i * e.r * 0.36);
+        ctx.lineTo(e.r * 0.2, -e.r * 0.94 + i * e.r * 0.36);
+        ctx.stroke();
+      }
       return;
     }
     if (e.type === "bossDestroy") {
@@ -2446,6 +2757,19 @@
 
     ctx.scale(facing, 1);
     ctx.rotate(p.aim.y * 0.035);
+    if (p.traits.stinkAura) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const aura = ctx.createRadialGradient(0, 0, 8, 0, 0, 58 + p.traits.stinkAura * 14);
+      aura.addColorStop(0, hasSynergy("rainbowStink") ? "rgba(255, 107, 138, 0.22)" : "rgba(196, 180, 154, 0.2)");
+      aura.addColorStop(0.55, hasSynergy("rainbowStink") ? "rgba(123, 224, 173, 0.12)" : "rgba(196, 180, 154, 0.08)");
+      aura.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, 0, 58 + p.traits.stinkAura * 14, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
     if (dashGlow) {
       ctx.strokeStyle = "#64c7ff";
       ctx.lineWidth = 4;
@@ -2461,6 +2785,13 @@
     ctx.ellipse(-2, 6, 21, 17, -0.12, 0, TAU);
     ctx.fill();
     ctx.stroke();
+    ctx.strokeStyle = "rgba(112, 71, 16, 0.38)";
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.arc(-6 + i * 5, 4 + Math.sin(p.step + i) * 1.2, 10 - i, -0.25, 1.05);
+      ctx.stroke();
+    }
 
     ctx.fillStyle = "#ffd75f";
     ctx.beginPath();
@@ -2485,33 +2816,128 @@
     ctx.arc(-10, 0, 6, 0.2, 2.5);
     ctx.stroke();
 
-    ctx.fillStyle = "#ffe58e";
-    ctx.beginPath();
-    ctx.arc(6, -12, 14, 0, TAU);
+    ctx.fillStyle = "#202322";
+    roundedRect(-17, 3, 34, 24, 7);
     ctx.fill();
-    ctx.strokeStyle = "#9b701f";
+    ctx.strokeStyle = "#0b0c0c";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(230, 240, 238, 0.18)";
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-15 + i * 8, 4);
+      ctx.lineTo(-20 + i * 9, 23);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#111414";
+    ctx.beginPath();
+    ctx.moveTo(-13, 5);
+    ctx.lineTo(-4, 19);
+    ctx.lineTo(5, 5);
+    ctx.lineTo(14, 19);
+    ctx.lineTo(17, 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#efc1a7";
+    ctx.beginPath();
+    ctx.ellipse(6, -15, 15, 17, 0.02, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "#6c4a37";
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
+    ctx.fillStyle = "rgba(120, 108, 96, 0.42)";
+    ctx.beginPath();
+    ctx.ellipse(6, -28, 13, 4.2, 0, Math.PI, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(60, 54, 48, 0.5)";
+    ctx.lineWidth = 1;
+    for (let i = -5; i <= 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(6 + i * 2, -29);
+      ctx.lineTo(6 + i * 2.1, -25.5 + Math.abs(i) * 0.2);
+      ctx.stroke();
+    }
+
     ctx.fillStyle = "#ff9f3f";
     ctx.beginPath();
-    ctx.ellipse(23, -12, 13, 6, 0, 0, TAU);
+    ctx.ellipse(22, -10, 8, 3.6, 0, 0, TAU);
     ctx.fill();
     ctx.strokeStyle = "#b75f14";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.6;
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(12, -12);
-    ctx.lineTo(34, -12);
+    ctx.moveTo(16, -10);
+    ctx.lineTo(29, -10);
     ctx.stroke();
 
-    ctx.fillStyle = "#141414";
+    ctx.strokeStyle = "#171717";
+    ctx.lineWidth = 1.9;
+    roundedRect(-6, -21, 11, 8, 2);
+    ctx.stroke();
+    roundedRect(8, -21, 11, 8, 2);
+    ctx.stroke();
     ctx.beginPath();
-    ctx.arc(10, -17, 3, 0, TAU);
+    ctx.moveTo(5, -17);
+    ctx.lineTo(8, -17);
+    ctx.moveTo(-6, -18);
+    ctx.lineTo(-12, -17);
+    ctx.moveTo(19, -18);
+    ctx.lineTo(24, -17);
+    ctx.stroke();
+
+    ctx.fillStyle = "#55616d";
+    ctx.beginPath();
+    ctx.arc(-1, -17, 2.1, 0, TAU);
+    ctx.arc(13, -17, 2.1, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#111";
+    ctx.beginPath();
+    ctx.arc(-0.5, -16.8, 1.1, 0, TAU);
+    ctx.arc(13.5, -16.8, 1.1, 0, TAU);
     ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.beginPath();
-    ctx.arc(11, -18, 1, 0, TAU);
+    ctx.arc(0.2, -17.6, 0.45, 0, TAU);
+    ctx.arc(14.2, -17.6, 0.45, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = "#2a1d17";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-7, -23);
+    ctx.lineTo(3, -22);
+    ctx.moveTo(9, -22);
+    ctx.lineTo(19, -23);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(95, 55, 42, 0.65)";
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(6, -15);
+    ctx.quadraticCurveTo(4.5, -11, 6.5, -8);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#6b2f35";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(1, -4);
+    ctx.quadraticCurveTo(7, -2.5, 13, -4);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(48, 34, 28, 0.44)";
+    for (let i = 0; i < 18; i++) {
+      const sx = -3 + (i % 6) * 3.2;
+      const sy = -5 + Math.floor(i / 6) * 3.2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 0.55, 0, TAU);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(210, 110, 40, 0.22)";
+    ctx.beginPath();
+    ctx.arc(-3, -10, 2.2, 0, TAU);
+    ctx.arc(15, -10, 1.8, 0, TAU);
     ctx.fill();
 
     const scarfColors = ["#ff5d73", "#f7c75d", "#7be0ad", "#64c7ff"];
@@ -2571,7 +2997,26 @@
     for (const p of state.particles) {
       ctx.save();
       ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
-      if (p.lightning) {
+      if (p.comic) {
+        ctx.translate(p.x, p.y);
+        ctx.scale(p.size, p.size);
+        ctx.rotate(Math.sin(p.life * 8) * 0.08);
+        ctx.font = "1000 20px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const w = ctx.measureText(p.text).width + 20;
+        ctx.fillStyle = "rgba(255, 252, 228, 0.94)";
+        roundedRect(-w / 2, -16, w, 30, 7);
+        ctx.fill();
+        ctx.strokeStyle = "#151510";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.fillStyle = p.color;
+        ctx.strokeStyle = "#151510";
+        ctx.lineWidth = 3;
+        ctx.strokeText(p.text, 0, -1);
+        ctx.fillText(p.text, 0, -1);
+      } else if (p.lightning) {
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -2607,11 +3052,25 @@
       const boxHeight = lines.length * lineHeight + 14;
       const alpha = clamp(Math.min(m.life, m.max - m.life + 0.45), 0, 1);
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillStyle = "rgba(0,0,0,0.34)";
+      roundedRect(x + 4, y + 5, maxWidth, boxHeight, 7);
+      ctx.fill();
+      ctx.fillStyle = mobile ? "rgba(255, 249, 219, 0.93)" : "rgba(18,19,18,0.78)";
       roundedRect(x, y, maxWidth, boxHeight, 7);
       ctx.fill();
-      ctx.fillStyle = m.color;
+      ctx.strokeStyle = mobile ? "#151510" : m.color;
+      ctx.lineWidth = mobile ? 3 : 2;
+      ctx.stroke();
+      ctx.fillStyle = mobile ? "#151510" : m.color;
       lines.forEach((line, index) => ctx.fillText(line, x + 9, y + 7 + index * lineHeight));
+      if (mobile) {
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.moveTo(x + maxWidth - 34, y);
+        ctx.lineTo(x + maxWidth - 10, y);
+        ctx.lineTo(x + maxWidth - 22, y + 12);
+        ctx.fill();
+      }
       if (mobile) y += boxHeight + 7;
       else y -= boxHeight + 7;
     }
@@ -2700,6 +3159,129 @@
     bossWrap.classList.remove("hidden");
     bossName.textContent = boss.name;
     bossBar.style.width = `${clamp((boss.hp / boss.maxHp) * 100, 0, 100)}%`;
+  }
+
+  function drawScreenFx() {
+    const player = state.player;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const cx = player ? player.x : state.w * 0.5;
+    const cy = player ? player.y : state.h * 0.5;
+    const light = ctx.createRadialGradient(cx, cy, 18, cx, cy, Math.max(state.w, state.h) * 0.62);
+    light.addColorStop(0, state.bossIntro ? "rgba(150, 230, 255, 0.16)" : "rgba(255, 215, 126, 0.13)");
+    light.addColorStop(0.45, "rgba(247, 199, 93, 0.045)");
+    light.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = light;
+    ctx.fillRect(0, 0, state.w, state.h);
+    ctx.globalCompositeOperation = "source-over";
+
+    const vignette = ctx.createRadialGradient(state.w * 0.5, state.h * 0.5, Math.min(state.w, state.h) * 0.24, state.w * 0.5, state.h * 0.5, Math.max(state.w, state.h) * 0.68);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.38)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, state.w, state.h);
+    ctx.globalAlpha = 0.11;
+    ctx.fillStyle = "rgba(247, 240, 220, 0.5)";
+    const dotStep = 12;
+    const phase = Math.floor(state.time * 8) % dotStep;
+    for (let y = phase; y < state.h; y += dotStep) {
+      for (let x = (y / dotStep) % 2 ? 0 : 6; x < state.w; x += dotStep) {
+        ctx.fillRect(x, y, 1.4, 1.4);
+      }
+    }
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = "#151510";
+    ctx.lineWidth = 2;
+    for (let y = 66; y < state.h - 30; y += 108) {
+      ctx.beginPath();
+      ctx.moveTo(34, y);
+      ctx.lineTo(state.w - 34, y + 18);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawSpeechBubble(x, y, text, lifeRatio = 1, boss = false) {
+    const mobile = state.w <= 680 || state.h > state.w * 1.2;
+    if (mobile && !boss) return;
+    ctx.save();
+    ctx.font = boss ? "900 12px system-ui" : "900 10px system-ui";
+    const maxWidth = boss ? 190 : 118;
+    const lines = wrapText(text, maxWidth - 18, boss ? 2 : 1);
+    const lineHeight = boss ? 15 : 13;
+    const w = Math.max(54, Math.min(maxWidth, Math.max(...lines.map((line) => ctx.measureText(line).width)) + 18));
+    const h = lines.length * lineHeight + 13;
+    const bx = clamp(x - w * 0.5, 10, state.w - w - 10);
+    const by = clamp(y - h, 72, state.h - h - 36);
+    ctx.globalAlpha = clamp(lifeRatio * 1.6, 0, 1);
+    ctx.fillStyle = boss ? "rgba(247, 240, 220, 0.96)" : "rgba(255, 252, 228, 0.94)";
+    ctx.strokeStyle = boss ? "#151510" : "#1f1710";
+    ctx.lineWidth = boss ? 4 : 3;
+    roundedRect(bx, by, w, h, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(clamp(x, bx + 18, bx + w - 18), by + h - 1);
+    ctx.lineTo(clamp(x - 9, bx + 8, bx + w - 8), by + h + 10);
+    ctx.lineTo(clamp(x + 7, bx + 8, bx + w - 8), by + h - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = boss ? "#3c3327" : "#2b1d18";
+    lines.forEach((line, index) => ctx.fillText(line, bx + 9, by + 7 + index * lineHeight));
+    ctx.restore();
+  }
+
+  function drawWallBolts(coolIntro) {
+    ctx.save();
+    ctx.fillStyle = coolIntro ? "rgba(200, 240, 250, 0.18)" : "rgba(247, 199, 93, 0.16)";
+    const top = 64;
+    const bottom = state.h - 28;
+    for (let x = 58; x < state.w - 58; x += 58) {
+      ctx.beginPath();
+      ctx.arc(x, top + 9, 2, 0, TAU);
+      ctx.arc(x + 14, bottom - 9, 2, 0, TAU);
+      ctx.fill();
+    }
+    for (let y = 88; y < state.h - 54; y += 58) {
+      ctx.beginPath();
+      ctx.arc(25, y, 2, 0, TAU);
+      ctx.arc(state.w - 25, y + 14, 2, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawNails(x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = "rgba(247, 240, 220, 0.18)";
+    for (const [nx, ny] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+      ctx.beginPath();
+      ctx.arc(nx, ny, 2, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBlobShadow(x, y, rx, ry, alpha = 0.28) {
+    ctx.save();
+    const s = ctx.createRadialGradient(x, y, 1, x, y, Math.max(rx, ry));
+    s.addColorStop(0, `rgba(0,0,0,${alpha})`);
+    s.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = s;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSpriteHighlight(x, y, rx, ry, alpha = 0.24) {
+    ctx.save();
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, -0.45, 0, TAU);
+    ctx.fill();
+    ctx.restore();
   }
 
   function roundedRect(x, y, w, h, r) {
