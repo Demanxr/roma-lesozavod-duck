@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <title>Рома из Лесозавода</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main id="game-shell" aria-label="Рома из Лесозавода: браузерная roguelite-игра">
+      <canvas id="game" width="960" height="540"></canvas>
+
+      <section id="hud" aria-live="polite">
+        <div class="hud-row hud-main">
+          <div id="hearts" class="hud-pill"></div>
+          <div class="hud-pill"><span>Этаж</span><b id="floor-label">1</b></div>
+          <div class="hud-pill"><span>Комната</span><b id="room-label">1</b></div>
+          <div class="hud-pill"><span>Лесо-монеты</span><b id="coin-label">0</b></div>
+        </div>
+        <div id="boss-wrap" class="boss-wrap hidden">
+          <span id="boss-name">Босс</span>
+          <div class="boss-track"><div id="boss-bar"></div></div>
+        </div>
+      </section>
+
+      <aside id="items-panel">
+        <h2>Предметы</h2>
+        <div id="items-list"></div>
+        <div id="synergy-toast"></div>
+      </aside>
+
+      <section id="overlay" class="overlay">
+        <div class="overlay-card">
+          <p class="kicker">Лесозаводский roguelite-shooter</p>
+          <h1>Рома из Лесозавода</h1>
+          <p>
+            Гей-утка Рома чистит поселок Лесозавод от карикатурной нечисти:
+            хулиганских Х-типов, алкашей и нарко-теней. Собирай мерзко-смешные
+            находки, смешивай эффекты и доберись до последнего босса.
+          </p>
+          <div class="controls-grid">
+            <span>WASD</span><small>движение</small>
+            <span>Мышь / стрелки</span><small>стрельба</small>
+            <span>Space</span><small>радужный рывок</small>
+            <span>Телефон</span><small>два джойстика</small>
+          </div>
+          <button id="start-button" type="button">Играть</button>
+        </div>
+      </section>
+
+      <section id="mobile-controls" aria-hidden="true">
+        <div class="stick-zone" id="move-zone">
+          <div class="stick-base"><div class="stick-knob" id="move-knob"></div></div>
+        </div>
+        <div class="stick-zone" id="shoot-zone">
+          <div class="stick-base"><div class="stick-knob" id="shoot-knob"></div></div>
+        </div>
+        <button id="dash-button" type="button" aria-label="Радужный рывок">↯</button>
+      </section>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>
