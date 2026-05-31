@@ -107,6 +107,10 @@
     dashDir: { x: 1, y: 0 },
     dashCooldown: 0,
     step: 0,
+    shotPulse: 0,
+    blinkTimer: rand(1.2, 3.4),
+    blinking: 0,
+    stepDust: 0,
     aim: { x: 1, y: 0 },
     items: [],
     itemIds: new Set(),
@@ -1045,6 +1049,14 @@
     const p = state.player;
     const move = moveInput();
     p.step += (move.active ? 10 : 2.4) * dt;
+    p.shotPulse = Math.max(0, (p.shotPulse || 0) - dt * 7.5);
+    p.blinkTimer -= dt;
+    if (p.blinkTimer <= 0 && p.blinking <= 0) {
+      p.blinking = 0.13;
+      p.blinkTimer = rand(1.6, 4.2);
+    }
+    p.blinking = Math.max(0, p.blinking - dt);
+    p.stepDust = Math.max(0, (p.stepDust || 0) - dt);
     p.dashCooldown = Math.max(0, p.dashCooldown - dt);
 
     if (p.dashTime > 0) {
@@ -1063,6 +1075,10 @@
     } else if (move.active) {
       p.x += move.x * p.speed * dt;
       p.y += move.y * p.speed * dt;
+      if (p.stepDust <= 0) {
+        p.stepDust = 0.075;
+        addParticle(p.x - move.x * 12 + rand(-5, 5), p.y + 23 + rand(-2, 3), "rgba(214, 171, 98, 0.42)", rand(2, 4.2), rand(0.22, 0.36));
+      }
     }
     p.x = clamp(p.x, 35, state.w - 35);
     p.y = clamp(p.y, 65, state.h - 35);
@@ -1141,6 +1157,7 @@
   function firePlayerShot(x, y, dx, dy) {
     const p = state.player;
     playSound("shoot");
+    p.shotPulse = 1;
     const shots = p.traits.shots;
     const spread = shots > 1 ? p.traits.spread || 0.16 : 0;
     const baseAngle = Math.atan2(dy, dx);
@@ -1211,6 +1228,7 @@
       const slow = (e.chill > 0 ? 0.48 : 1) * (e.spawnGrace > 0 ? 0.28 : 1);
       e.cooldown -= dt;
       e.wobble += dt * (e.boss ? 1.6 : 4.2);
+      e.hitPulse = Math.max(0, (e.hitPulse || 0) - dt * 7.5);
       updateEnemyQuip(e, dt);
 
       if (e.dash > 0) {
@@ -1496,6 +1514,7 @@
   function damageEnemy(e, amount, bullet = null, direct = true) {
     e.hp -= amount;
     if (direct) {
+      e.hitPulse = 1;
       e.flash = 0.11;
       addParticle(e.x, e.y, bullet?.crit ? "#fff3a6" : "#f7f0dc", bullet?.crit ? 9 : 5, 0.28);
     }
@@ -2057,6 +2076,21 @@
       ctx.fill();
     }
 
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    for (let i = 0; i < 22; i++) {
+      const seed = 1200 + i * 13 + state.floor * 29 + state.room * 31;
+      const drift = (state.time * (10 + hash01(seed + 4) * 22) + hash01(seed + 1) * state.w) % (state.w + 80);
+      const x = drift - 40;
+      const y = 86 + hash01(seed + 2) * (state.h - 138) + Math.sin(state.time * 1.8 + seed) * 5;
+      const alpha = coolIntro ? 0.08 + hash01(seed + 3) * 0.08 : 0.05 + hash01(seed + 3) * 0.09;
+      ctx.fillStyle = coolIntro ? `rgba(190, 239, 255, ${alpha})` : `rgba(247, 199, 93, ${alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 1.2 + hash01(seed + 5) * 2.4, 0.7 + hash01(seed + 6) * 1.2, Math.sin(state.time + seed), 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+
     for (let i = 0; i < 12; i++) {
       const seed = 900 + i * 11 + state.floor * 43 + state.room * 17 + (state.roomIsShop ? 700 : 0);
       const x = 58 + hash01(seed) * (state.w - 116);
@@ -2210,6 +2244,10 @@
       const bob = Math.sin((p.bob || 0) * 3) * 4;
       ctx.save();
       ctx.translate(p.x, p.y + bob);
+      const pickupPulse = 1 + Math.sin(state.time * 5 + p.x * 0.03 + p.y * 0.02) * 0.055;
+      const pickupTilt = Math.sin(state.time * 3.1 + p.x * 0.01) * 0.08;
+      ctx.rotate(pickupTilt);
+      ctx.scale(pickupPulse, pickupPulse);
       if (p.type === "coin") {
         drawBlobShadow(0, 7, p.r * 1.2, 4, 0.24);
         const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, p.r * 2.4);
@@ -2278,6 +2316,14 @@
     for (const b of state.bullets) {
       ctx.save();
       ctx.globalAlpha = clamp(b.life / 0.12, 0.25, 1);
+      const speed = Math.hypot(b.vx, b.vy) || 1;
+      ctx.strokeStyle = b.rainbowTrail ? b.color : "rgba(247,240,220,0.32)";
+      ctx.lineWidth = Math.max(2, b.r * 0.45);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(b.x - (b.vx / speed) * b.r * 5, b.y - (b.vy / speed) * b.r * 5);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
       const glow = ctx.createRadialGradient(b.x, b.y, 1, b.x, b.y, b.r * 3.3);
       glow.addColorStop(0, b.crit ? "rgba(255,243,166,0.48)" : "rgba(247,240,220,0.3)");
       glow.addColorStop(1, "rgba(255,255,255,0)");
@@ -2299,6 +2345,14 @@
       ctx.restore();
     }
     for (const b of state.enemyBullets) {
+      const speed = Math.hypot(b.vx, b.vy) || 1;
+      ctx.strokeStyle = "rgba(231,93,85,0.28)";
+      ctx.lineWidth = Math.max(2, b.r * 0.42);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(b.x - (b.vx / speed) * b.r * 4, b.y - (b.vy / speed) * b.r * 4);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
       const glow = ctx.createRadialGradient(b.x, b.y, 1, b.x, b.y, b.r * 3.2);
       glow.addColorStop(0, "rgba(231,93,85,0.28)");
       glow.addColorStop(1, "rgba(231,93,85,0)");
@@ -2320,9 +2374,15 @@
     for (const e of state.enemies) {
       if (e.type === "bossStuffy") drawStuffyAura(e);
       ctx.save();
-      ctx.translate(e.x, e.y);
-      drawBlobShadow(0, e.r * 0.95, e.r * 1.15, e.r * 0.34, e.boss ? 0.34 : 0.26);
-      ctx.rotate(Math.sin(e.wobble) * (e.boss ? 0.05 : 0.12));
+      const hitPulse = e.hitPulse || 0;
+      const dashPulse = e.dash > 0 ? 1 : 0;
+      const hop = Math.sin(e.wobble * (e.boss ? 1.35 : 2.1)) * (e.boss ? 1.2 : 2.4);
+      const squishX = 1 + hitPulse * 0.16 + dashPulse * 0.11;
+      const squishY = 1 - hitPulse * 0.1 - dashPulse * 0.08 + Math.sin(e.wobble * 2.2) * (e.boss ? 0.012 : 0.025);
+      ctx.translate(e.x, e.y + hop);
+      drawBlobShadow(0, e.r * 0.95 - hop * 0.18, e.r * (1.15 + hitPulse * 0.18), e.r * (0.34 - hitPulse * 0.04), e.boss ? 0.34 : 0.26);
+      ctx.rotate(Math.sin(e.wobble) * (e.boss ? 0.05 : 0.12) + hitPulse * Math.sin(state.time * 48) * 0.035);
+      ctx.scale(squishX, squishY);
       ctx.globalAlpha = e.spawnGrace > 0 ? 0.42 + Math.sin(state.time * 18) * 0.18 : e.flash > 0 ? 0.72 : 1;
       if (e.boss) drawBoss(e);
       else if (e.type === "hType") drawXType(e);
@@ -2733,17 +2793,20 @@
   function drawPlayer() {
     const p = state.player;
     if (!p) return;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    if (p.invuln > 0 && Math.floor(state.time * 18) % 2 === 0) ctx.globalAlpha = 0.55;
-
     const walk = Math.sin(p.step) * 3;
+    const bodyBob = Math.sin(p.step) * 1.2 - (p.shotPulse || 0) * 1.4;
+    const breathe = Math.sin(state.time * 4.2) * 0.035;
+    const shotKick = p.shotPulse || 0;
     const dashGlow = p.dashTime > 0;
+    const dashStretch = dashGlow ? 0.14 : 0;
     const facing = p.aim.x < -0.15 ? -1 : 1;
+    ctx.save();
+    ctx.translate(p.x, p.y + bodyBob);
+    if (p.invuln > 0 && Math.floor(state.time * 18) % 2 === 0) ctx.globalAlpha = 0.55;
 
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
-    ctx.ellipse(0, 24, 25, 7, 0, 0, TAU);
+    ctx.ellipse(0, 24 - bodyBob * 0.35, 25 + shotKick * 4 + dashStretch * 12, 7 - shotKick * 0.9, 0, 0, TAU);
     ctx.fill();
 
     ctx.save();
@@ -2755,7 +2818,7 @@
     ctx.stroke();
     ctx.restore();
 
-    ctx.scale(facing, 1);
+    ctx.scale(facing * (1 + breathe + dashStretch + shotKick * 0.08), 1 - breathe * 0.45 - dashStretch * 0.28 + shotKick * 0.04);
     ctx.rotate(p.aim.y * 0.035);
     if (p.traits.stinkAura) {
       ctx.save();
@@ -2776,6 +2839,19 @@
       ctx.beginPath();
       ctx.arc(0, 3, 26, 0, TAU);
       ctx.stroke();
+      ctx.save();
+      ctx.globalAlpha = 0.38;
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 4; i++) {
+        const y = -10 + i * 8;
+        ctx.strokeStyle = i % 2 ? "#7be0ad" : "#64c7ff";
+        ctx.beginPath();
+        ctx.moveTo(-25 - i * 4, y);
+        ctx.lineTo(-47 - i * 8, y + Math.sin(state.time * 18 + i) * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     ctx.strokeStyle = "#8e6417";
@@ -2888,21 +2964,32 @@
     ctx.lineTo(24, -17);
     ctx.stroke();
 
-    ctx.fillStyle = "#55616d";
-    ctx.beginPath();
-    ctx.arc(-1, -17, 2.1, 0, TAU);
-    ctx.arc(13, -17, 2.1, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#111";
-    ctx.beginPath();
-    ctx.arc(-0.5, -16.8, 1.1, 0, TAU);
-    ctx.arc(13.5, -16.8, 1.1, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(0.2, -17.6, 0.45, 0, TAU);
-    ctx.arc(14.2, -17.6, 0.45, 0, TAU);
-    ctx.fill();
+    if (p.blinking > 0) {
+      ctx.strokeStyle = "#171717";
+      ctx.lineWidth = 1.7;
+      ctx.beginPath();
+      ctx.moveTo(-3.2, -17);
+      ctx.lineTo(1.8, -16.8);
+      ctx.moveTo(11, -16.8);
+      ctx.lineTo(16, -17);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "#55616d";
+      ctx.beginPath();
+      ctx.arc(-1, -17, 2.1, 0, TAU);
+      ctx.arc(13, -17, 2.1, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = "#111";
+      ctx.beginPath();
+      ctx.arc(-0.5, -16.8, 1.1, 0, TAU);
+      ctx.arc(13.5, -16.8, 1.1, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(0.2, -17.6, 0.45, 0, TAU);
+      ctx.arc(14.2, -17.6, 0.45, 0, TAU);
+      ctx.fill();
+    }
 
     ctx.strokeStyle = "#2a1d17";
     ctx.lineWidth = 2.2;
@@ -2998,8 +3085,10 @@
       ctx.save();
       ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
       if (p.comic) {
+        const progress = 1 - p.life / p.max;
+        const pop = 1 + Math.sin(progress * Math.PI) * 0.35;
         ctx.translate(p.x, p.y);
-        ctx.scale(p.size, p.size);
+        ctx.scale(p.size * pop, p.size * pop);
         ctx.rotate(Math.sin(p.life * 8) * 0.08);
         ctx.font = "1000 20px system-ui";
         ctx.textAlign = "center";
@@ -3134,15 +3223,24 @@
       ctx.fill();
     }
 
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "rgba(5, 10, 11, 0.52)";
-    roundedRect(state.w * 0.5 - 150, 90, 300, 34, 7);
-    ctx.fill();
-    ctx.fillStyle = intro.stage < 2 ? "#dbefff" : "#f7d8a8";
+    const introText = intro.stage < 1 ? "Слишком свежо. Подозрительно." : intro.stage < 3 ? "Кто-то стучит сверху." : "Духота входит.";
+    const introW = Math.min(390, state.w - 28);
     ctx.font = "900 14px system-ui";
+    const introLines = wrapText(introText, introW - 24, 2);
+    const introH = introLines.length * 17 + 14;
+    const introX = state.w * 0.5 - introW * 0.5;
+    const introY = 90;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "rgba(5, 10, 11, 0.58)";
+    roundedRect(introX, introY, introW, introH, 7);
+    ctx.fill();
+    ctx.strokeStyle = intro.stage < 2 ? "rgba(219,239,255,0.3)" : "rgba(247,216,168,0.32)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = intro.stage < 2 ? "#dbefff" : "#f7d8a8";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(intro.stage < 1 ? "Слишком свежо. Подозрительно." : intro.stage < 3 ? "Кто-то стучит сверху." : "Духота входит.", state.w * 0.5, 107);
+    introLines.forEach((line, index) => ctx.fillText(line, state.w * 0.5, introY + 16 + index * 17));
     ctx.restore();
   }
 
@@ -3205,14 +3303,16 @@
     const mobile = state.w <= 680 || state.h > state.w * 1.2;
     if (mobile && !boss) return;
     ctx.save();
-    ctx.font = boss ? "900 12px system-ui" : "900 10px system-ui";
-    const maxWidth = boss ? 190 : 118;
-    const lines = wrapText(text, maxWidth - 18, boss ? 2 : 1);
-    const lineHeight = boss ? 15 : 13;
+    const fontSize = boss ? (mobile ? 11 : 12) : 10;
+    ctx.font = `900 ${fontSize}px system-ui`;
+    const maxWidth = boss ? Math.min(mobile ? state.w - 24 : 260, state.w - 20) : 118;
+    const lines = wrapText(text, maxWidth - 20, boss ? 3 : 1);
+    const lineHeight = boss ? fontSize + 5 : 13;
     const w = Math.max(54, Math.min(maxWidth, Math.max(...lines.map((line) => ctx.measureText(line).width)) + 18));
     const h = lines.length * lineHeight + 13;
+    const float = Math.sin(state.time * (boss ? 5 : 7) + x * 0.03) * (boss ? 2 : 1.4);
     const bx = clamp(x - w * 0.5, 10, state.w - w - 10);
-    const by = clamp(y - h, 72, state.h - h - 36);
+    const by = clamp(y - h + float, 72, state.h - h - 36);
     ctx.globalAlpha = clamp(lifeRatio * 1.6, 0, 1);
     ctx.fillStyle = boss ? "rgba(247, 240, 220, 0.96)" : "rgba(255, 252, 228, 0.94)";
     ctx.strokeStyle = boss ? "#151510" : "#1f1710";
