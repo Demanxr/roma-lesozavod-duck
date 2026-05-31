@@ -609,7 +609,7 @@
     };
     state.player.x = state.w * 0.5;
     state.player.y = state.h * 0.68;
-    state.player.invuln = Math.max(state.player.invuln, 4.6);
+    state.player.invuln = Math.max(state.player.invuln, 7.0);
     addMessage("Комната пустая. Прохладно. Даже дышать приятно.", "#64c7ff");
   }
 
@@ -773,7 +773,9 @@
   }
 
   function addMessage(text, color = "#f7c75d") {
-    state.messages.push({ text, color, life: 3.2, max: 3.2 });
+    const life = clamp(3.2 + text.length / 80, 3.2, 6.4);
+    state.messages.push({ text, color, life, max: life });
+    if (state.messages.length > 5) state.messages.splice(0, state.messages.length - 5);
   }
 
   function getRandomItem() {
@@ -1446,7 +1448,7 @@
 
     if (state.shop.closed && nearKiosk && state.shop.noticeCooldown <= 0) {
       playSound("denied");
-      addMessage(state.kioskVisits === 1 ? "Романькова: перерыв 15 минут. Первый киоск закрыт." : "Романькова опять на перерыве. Бывает.", "#f7c75d");
+      addMessage(state.kioskVisits === 1 ? "Блядь опять перерыв." : "Романькова опять на перерыве. Бывает.", "#f7c75d");
       state.shop.noticeCooldown = 2.0;
     }
 
@@ -1477,21 +1479,21 @@
     if (!intro || intro.done) return;
     intro.time += dt;
 
-    if (intro.stage === 0 && intro.time > 1.35) {
+    if (intro.stage === 0 && intro.time > 2.0) {
       intro.stage = 1;
       state.shake = Math.max(state.shake, 3);
       playSound("knock");
       addMessage("Тук.", "#f7f0dc");
       addKnockDust();
     }
-    if (intro.stage === 1 && intro.time > 2.25) {
+    if (intro.stage === 1 && intro.time > 3.65) {
       intro.stage = 2;
       state.shake = Math.max(state.shake, 5);
       playSound("knock");
       addMessage("Тук. Тук.", "#f7f0dc");
       addKnockDust();
     }
-    if (intro.stage === 2 && intro.time > 3.35) {
+    if (intro.stage === 2 && intro.time > 5.65) {
       intro.stage = 3;
       state.shake = Math.max(state.shake, 8);
       playSound("aura");
@@ -2590,22 +2592,54 @@
   }
 
   function drawMessages() {
-    const x = 48;
-    let y = state.h - 88;
+    const mobile = state.w <= 680 || state.h > state.w * 1.2;
+    const maxWidth = mobile ? state.w - 28 : Math.min(580, state.w - 96);
+    const x = mobile ? 14 : 48;
+    let y = mobile ? Math.max(94, state.h * 0.17) : state.h - 88;
+    const shown = state.messages.slice(mobile ? -2 : -3);
     ctx.save();
-    ctx.font = "700 14px system-ui";
-    ctx.textBaseline = "bottom";
-    for (const m of state.messages.slice(-3)) {
-      ctx.globalAlpha = clamp(m.life, 0, 1);
+    ctx.font = mobile ? "800 13px system-ui" : "700 14px system-ui";
+    ctx.textBaseline = "top";
+    for (let i = shown.length - 1; i >= 0; i--) {
+      const m = shown[i];
+      const lines = wrapText(m.text, maxWidth - 18, mobile ? 3 : 2);
+      const lineHeight = mobile ? 17 : 18;
+      const boxHeight = lines.length * lineHeight + 14;
+      const alpha = clamp(Math.min(m.life, m.max - m.life + 0.45), 0, 1);
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = "rgba(0,0,0,0.5)";
-      const width = Math.min(ctx.measureText(m.text).width + 20, state.w - 96);
-      roundedRect(x - 10, y - 22, width, 28, 7);
+      roundedRect(x, y, maxWidth, boxHeight, 7);
       ctx.fill();
       ctx.fillStyle = m.color;
-      ctx.fillText(m.text, x, y);
-      y -= 34;
+      lines.forEach((line, index) => ctx.fillText(line, x + 9, y + 7 + index * lineHeight));
+      if (mobile) y += boxHeight + 7;
+      else y -= boxHeight + 7;
     }
     ctx.restore();
+  }
+
+  function wrapText(text, maxWidth, maxLines = 3) {
+    const words = String(text).split(" ");
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width <= maxWidth || !line) {
+        line = test;
+      } else {
+        lines.push(line);
+        line = word;
+        if (lines.length >= maxLines) break;
+      }
+    }
+    if (line && lines.length < maxLines) lines.push(line);
+    if (words.length && lines.length === maxLines && words.join(" ") !== lines.join(" ")) {
+      const last = lines[lines.length - 1];
+      let trimmed = last;
+      while (trimmed.length > 4 && ctx.measureText(`${trimmed}...`).width > maxWidth) trimmed = trimmed.slice(0, -1);
+      lines[lines.length - 1] = `${trimmed.trim()}...`;
+    }
+    return lines;
   }
 
   function drawBossIntro() {
@@ -2689,6 +2723,16 @@
   }
 
   function setupInput() {
+    const blockTouch = (e) => e.preventDefault();
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+    document.addEventListener("selectstart", (e) => e.preventDefault());
+    document.addEventListener("dragstart", (e) => e.preventDefault());
+    document.addEventListener("gesturestart", blockTouch, { passive: false });
+    document.addEventListener("touchmove", blockTouch, { passive: false });
+    document.addEventListener("touchstart", (e) => {
+      if (e.target?.closest?.("#mobile-controls, #game")) e.preventDefault();
+    }, { passive: false });
+
     window.addEventListener("keydown", (e) => {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(e.code)) e.preventDefault();
       state.input.keys.add(e.code);
@@ -2760,13 +2804,20 @@
       e.preventDefault();
     };
     zone.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
       pointerId = e.pointerId;
       zone.setPointerCapture(pointerId);
       move(e);
     });
     zone.addEventListener("pointermove", move);
-    zone.addEventListener("pointerup", reset);
-    zone.addEventListener("pointercancel", reset);
+    zone.addEventListener("pointerup", (e) => {
+      e.preventDefault();
+      reset();
+    });
+    zone.addEventListener("pointercancel", (e) => {
+      e.preventDefault();
+      reset();
+    });
     zone.addEventListener("lostpointercapture", reset);
   }
 

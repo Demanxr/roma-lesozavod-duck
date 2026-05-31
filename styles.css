@@ -16,6 +16,10 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 html,
@@ -26,6 +30,7 @@ body {
   overflow: hidden;
   background: #171711;
   color: var(--ink);
+  overscroll-behavior: none;
   touch-action: none;
 }
 
@@ -40,6 +45,8 @@ button {
   height: 100dvh;
   min-height: 480px;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
   background:
     radial-gradient(circle at 50% 46%, rgba(133, 105, 54, 0.38), transparent 42%),
     linear-gradient(135deg, #1f2418 0%, #191816 46%, #251d1a 100%);
@@ -53,6 +60,7 @@ button {
   display: block;
   image-rendering: crisp-edges;
   cursor: crosshair;
+  touch-action: none;
 }
 
 #hud {
@@ -301,6 +309,7 @@ h1 {
   z-index: 6;
   display: none;
   pointer-events: none;
+  touch-action: none;
 }
 
 .stick-zone {
@@ -360,6 +369,7 @@ h1 {
   transform: translateX(-50%);
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.32);
   pointer-events: auto;
+  touch-action: none;
 }
 
 #dash-button:active {
